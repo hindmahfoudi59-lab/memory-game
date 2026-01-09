@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Memory Game</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<style>
+body {
+  font-family: Arial, sans-serif;
+  background: #eef4ff;
+  color: #333;
+  text-align: center;
+  margin: 0;
+}
+
+h2 { margin-top: 15px; }
+
+#info {
+  margin: 10px;
+  font-size: 18px;
+}
+
+/* ✅ واجهة اللعب مربعة ووسط */
+#game {
+  display: grid;
+  gap: 12px;
+  width: 90vw;
+  max-width: 360px;
+  aspect-ratio: 1 / 1;
+  margin: 20px auto;
+  place-content: center;
+}
+
+/* ✅ كروت مربعة وصغار */
+.card {
+  aspect-ratio: 1 / 1;
+  width: 80px;
+  border-radius: 14px;
+  font-size: 32px;
+
+  display: flex;
+  justify-content: center;
+  align-items: center;
+
+  cursor: pointer;
+  user-select: none;
+  background: #ccc;
+}
+
+.card.open {
+  filter: brightness(1.1);
+}
+
+#message {
+  margin-top: 20px;
+  font-size: 22px;
+  display: none;
+}
+
+button {
+  padding: 10px 20px;
+  border: none;
+  border-radius: 12px;
+  cursor: pointer;
+  font-size: 16px;
+  background: #6c63ff;
+  color: white;
+}
+</style>
+</head>
+
+<body>
+
+<h2>🧠 Memory Game</h2>
+
+<div id="info">
+  Level: <span id="level"></span> |
+  Tries: <span id="tries"></span> |
+  Time: <span id="time"></span>s
+</div>
+
+<div id="game"></div>
+<div id="message"></div>
+<br>
+<button onclick="restartGame()">Restart</button>
+
+<audio id="winSound" src="https://assets.mixkit.co/sfx/preview/mixkit-achievement-bell-600.mp3"></audio>
+<audio id="loseSound" src="https://assets.mixkit.co/sfx/preview/mixkit-player-losing-or-failing-2042.mp3"></audio>
+
+<script>
+const fruits = ['🍎','🍌','🍓','🍇','🍉','🍒','🥝','🍍','🍑','🍊'];
+const birds  = ['🐦','🦉','🦜','🦅','🐧','🐤','🦩','🦢','🕊️','🐓'];
+const objects = ['🚗','🚀','⏰','📱','💡','🎧','📷','🧲','⌚','🔑'];
+
+const cardColors = ['#ffd6a5','#fdffb6','#caffbf','#9bf6ff','#bdb2ff','#ffc6ff'];
+
+let level = Number(localStorage.getItem("level")) || 1;
+let firstCard = null;
+let lock = false;
+let matched = 0;
+let tries = 0;
+let maxTries = 0;
+let time = 0;
+let timer;
+let gameOver = false;
+
+function getCardCount(level) {
+  if (level <= 2) return 8;
+  if (level === 3) return 10;
+  if (level <= 5) return 12;
+  if (level === 6) return 16;
+  return 20;
+}
+
+function getSymbols(level) {
+  if (level <= 3) return fruits;
+  if (level <= 6) return birds;
+  return objects;
+}
+
+function startGame() {
+  clearInterval(timer);
+  gameOver = false;
+  firstCard = null;
+  matched = 0;
+  lock = false;
+  tries = 0;
+
+  const cardCount = getCardCount(level);
+  const pairs = cardCount / 2;
+  maxTries = pairs;
+  time = 30 + level * 5;
+
+  document.getElementById("level").innerText = level;
+  document.getElementById("tries").innerText = `${tries} / ${maxTries}`;
+  document.getElementById("time").innerText = time;
+  document.getElementById("message").style.display = "none";
+
+  const symbolsBase = getSymbols(level).slice(0, pairs);
+  const cardsData = [...symbolsBase, ...symbolsBase].sort(() => Math.random() - 0.5);
+
+  const game = document.getElementById("game");
+  game.innerHTML = "";
+
+  /* ✅ عدد الأعمدة صحيح */
+  const cols = Math.ceil(Math.sqrt(cardCount));
+  game.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
+
+  const color = cardColors[(level - 1) % cardColors.length];
+
+  cardsData.forEach(symbol => {
+    const card = document.createElement("div");
+    card.className = "card";
+    card.style.background = color;
+    card.dataset.symbol = symbol;
+
+    card.onclick = () => {
+      if (lock || card.classList.contains("open") || gameOver) return;
+
+      card.classList.add("open");
+      card.innerText = symbol;
+
+      if (!firstCard) {
+        firstCard = card;
+        return;
+      }
+
+      lock = true;
+
+      setTimeout(() => {
+        if (firstCard.dataset.symbol === card.dataset.symbol) {
+          matched += 2;
+          tries = 0;
+          document.getElementById("tries").innerText = `${tries} / ${maxTries}`;
+          firstCard = null;
+          lock = false;
+
+          if (matched === cardsData.length) winGame();
+        } else {
+          tries++;
+          document.getElementById("tries").innerText = `${tries} / ${maxTries}`;
+
+          card.classList.remove("open");
+          firstCard.classList.remove("open");
+          card.innerText = "";
+          firstCard.innerText = "";
+          firstCard = null;
+          lock = false;
+
+          if (tries >= maxTries) loseGame();
+        }
+      }, 700);
+    };
+
+    game.appendChild(card);
+  });
+
+  timer = setInterval(() => {
+    if (gameOver) return;
+    time--;
+    document.getElementById("time").innerText = time;
+    if (time <= 0) loseGame();
+  }, 1000);
+}
+
+function winGame() {
+  gameOver = true;
+  clearInterval(timer);
+  document.getElementById("winSound").play();
+  document.getElementById("message").innerText = "🎉 Level Completed!";
+  document.getElementById("message").style.display = "block";
+  level++;
+  localStorage.setItem("level", level);
+  setTimeout(startGame, 2000);
+}
+
+function loseGame() {
+  gameOver = true;
+  clearInterval(timer);
+  document.getElementById("loseSound").play();
+  document.getElementById("message").innerText = "❌ You Lost! Try Again";
+  document.getElementById("message").style.display = "block";
+}
+
+/* ✅ Restart ما كيرجعش Level */
+function restartGame() {
+  startGame();
+}
+
+startGame();
+</script>
+</body>
+</index.html>
